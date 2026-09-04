@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>파티클 캔버스</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    background: #05060a;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  canvas { display: block; touch-action: none; }
+  .ui {
+    position: fixed;
+    top: 16px; left: 16px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: rgba(20,20,30,0.6);
+    backdrop-filter: blur(8px);
+    padding: 10px 14px;
+    border-radius: 14px;
+    color: #cfd3ff;
+    font-size: 13px;
+    z-index: 10;
+  }
+  .swatch {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.15s;
+  }
+  .swatch:hover { transform: scale(1.15); }
+  .swatch.active { border-color: white; }
+  .ui button {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #cfd3ff;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .ui button:hover { background: rgba(255,255,255,0.2); }
+  .hint {
+    position: fixed;
+    bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    color: rgba(207,211,255,0.5);
+    font-size: 12px;
+    z-index: 10;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="ui">
+  <div class="swatch active" style="background:#7aa2f7" data-palette="cool"></div>
+  <div class="swatch" style="background:#f7768e" data-palette="warm"></div>
+  <div class="swatch" style="background:#9ece6a" data-palette="nature"></div>
+  <div class="swatch" style="background:#bb9af7" data-palette="candy"></div>
+  <div class="swatch" style="background:#ffffff" data-palette="mono"></div>
+  <button id="clearBtn">지우기</button>
+</div>
+<div class="hint">마우스나 손가락으로 움직여서 그려보세요</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let W, H;
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const palettes = {
+    cool:   ['#7aa2f7', '#7dcfff', '#bb9af7', '#c0caf5'],
+    warm:   ['#f7768e', '#ff9e64', '#e0af68', '#ffc777'],
+    nature: ['#9ece6a', '#73daca', '#7dcfff', '#b9f27c'],
+    candy:  ['#bb9af7', '#f7768e', '#ff9e64', '#7dcfff'],
+    mono:   ['#ffffff', '#cfd3ff', '#9aa0d6', '#6b7099']
+  };
+  let currentPalette = palettes.cool;
+
+  document.querySelectorAll('.swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+      currentPalette = palettes[sw.dataset.palette];
+    });
+  });
+
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    particles.length = 0;
+  });
+
+  let particles = [];
+  let mouse = { x: W/2, y: H/2, px: W/2, py: H/2, down: false };
+
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+
+  function spawn(x, y, vx, vy) {
+    const color = currentPalette[Math.floor(Math.random() * currentPalette.length)];
+    particles.push({
+      x, y,
+      vx: vx + rand(-1.5, 1.5),
+      vy: vy + rand(-1.5, 1.5),
+      life: 1,
+      decay: rand(0.006, 0.02),
+      size: rand(2, 7),
+      color
+    });
+  }
+
+  function handleMove(x, y) {
+    const dx = x - mouse.px;
+    const dy = y - mouse.py;
+    const dist = Math.hypot(dx, dy);
+    const steps = Math.min(Math.max(Math.floor(dist / 3), 1), 12);
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      spawn(mouse.px + dx * t, mouse.py + dy * t, dx * 0.05, dy * 0.05);
+    }
+    mouse.px = x; mouse.py = y;
+    mouse.x = x; mouse.y = y;
+  }
+
+  canvas.addEventListener('mousemove', e => {
+    handleMove(e.clientX, e.clientY);
+  });
+  canvas.addEventListener('mousedown', e => {
+    mouse.down = true;
+    mouse.px = e.clientX; mouse.py = e.clientY;
+  });
+  window.addEventListener('mouseup', () => mouse.down = false);
+
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    mouse.px = t.clientX; mouse.py = t.clientY;
+  }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    handleMove(t.clientX, t.clientY);
+  }, { passive: false });
+
+  function loop() {
+    ctx.fillStyle = 'rgba(5,6,10,0.15)';
+    ctx.fillRect(0, 0, W, H);
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.01;
+      p.vx *= 0.98;
+      p.vy *= 0.98;
+      p.life -= p.decay;
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+        continue;
+      }
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    if (particles.length > 2500) particles.splice(0, particles.length - 2500);
+
+    requestAnimationFrame(loop);
+  }
+  loop();
+
+  // gentle ambient drift so the canvas isn't totally static
+  let t0 = 0;
+  setInterval(() => {
+    t0 += 0.1;
+    const x = W/2 + Math.cos(t0) * 100;
+    const y = H/2 + Math.sin(t0 * 1.3) * 60;
+  }, 1000);
+})();
+</script>
+</body>
+</html>
