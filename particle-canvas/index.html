@@ -181,14 +181,6 @@
     requestAnimationFrame(loop);
   }
   loop();
-
-  // gentle ambient drift so the canvas isn't totally static
-  let t0 = 0;
-  setInterval(() => {
-    t0 += 0.1;
-    const x = W/2 + Math.cos(t0) * 100;
-    const y = H/2 + Math.sin(t0 * 1.3) * 60;
-  }, 1000);
 })();
 </script>
 </body>
