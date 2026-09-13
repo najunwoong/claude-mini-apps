@@ -157,6 +157,10 @@
     width: 20px; height: 20px;
     border-radius: 6px;
     border: 2px solid var(--text-dim);
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font-family: inherit;
     cursor: pointer;
     flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
@@ -171,30 +175,56 @@
   }
   .todo-item .del:hover { color: var(--accent-2); }
   .empty-msg { color: var(--text-dim); font-size: 13px; text-align: center; padding: 12px 0; }
+
+  .pomodoro-label {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 8px;
+    min-height: 15px;
+  }
+  .toast {
+    margin-top: 16px;
+    background: rgba(158, 206, 106, 0.12);
+    border: 1px solid var(--done);
+    color: var(--done);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .toast[hidden] { display: none; }
+
+  /* 키보드 사용자에게 현재 포커스 위치를 보이게 한다 */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 </style>
 </head>
 <body>
 <div class="app">
   <div class="timer-card">
     <div class="mode-switch">
-      <button class="mode-btn active" data-mode="focus" data-min="25">집중 25</button>
-      <button class="mode-btn" data-mode="short" data-min="5">짧은휴식 5</button>
-      <button class="mode-btn" data-mode="long" data-min="15">긴휴식 15</button>
+      <button type="button" class="mode-btn active" data-mode="focus" data-min="25" aria-pressed="true">집중 25</button>
+      <button type="button" class="mode-btn" data-mode="short" data-min="5" aria-pressed="false">짧은휴식 5</button>
+      <button type="button" class="mode-btn" data-mode="long" data-min="15" aria-pressed="false">긴휴식 15</button>
     </div>
     <div class="session-label" id="sessionLabel">집중 시간</div>
-    <div class="time-display" id="timeDisplay">25:00</div>
+    <div class="time-display" id="timeDisplay" role="timer" aria-live="off">25:00</div>
     <div class="controls">
-      <button class="btn btn-primary" id="startBtn">시작</button>
-      <button class="btn btn-secondary" id="resetBtn">리셋</button>
+      <button type="button" class="btn btn-primary" id="startBtn">시작</button>
+      <button type="button" class="btn btn-secondary" id="resetBtn">리셋</button>
     </div>
     <div class="pomodoro-count" id="pomodoroCount"></div>
+    <div class="pomodoro-label" id="pomodoroLabel"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </div>
 
   <div class="todo-card">
     <h3>할 일</h3>
     <div class="todo-input-row">
       <input type="text" id="todoInput" placeholder="할 일을 입력하고 Enter" maxlength="120">
-      <button id="addBtn">+</button>
+      <button type="button" id="addBtn" aria-label="할 일 추가">+</button>
     </div>
     <ul class="todo-list" id="todoList"></ul>
   </div>
@@ -208,15 +238,67 @@
   const resetBtn = document.getElementById('resetBtn');
   const modeBtns = document.querySelectorAll('.mode-btn');
   const pomodoroCount = document.getElementById('pomodoroCount');
+  const pomodoroLabel = document.getElementById('pomodoroLabel');
+  const toast = document.getElementById('toast');
 
   const LABELS = { focus: '집중 시간', short: '짧은 휴식', long: '긴 휴식' };
+
+  // localStorage는 프라이빗 모드나 사이트 데이터 차단 환경에서 예외를 던진다.
+  // 실패해도 앱이 죽지 않도록 감싸고 기본값으로 폴백한다.
+  const store = {
+    get(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw === null ? fallback : JSON.parse(raw);
+      } catch (e) {
+        return fallback;
+      }
+    },
+    set(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (e) {}
+    }
+  };
 
   let mode = 'focus';
   let totalSeconds = 25 * 60;
   let remaining = totalSeconds;
   let running = false;
   let timerId = null;
-  let completedPomodoros = parseInt(localStorage.getItem('ft_pomodoros') || '0', 10);
+  let endTime = null;
+
+  function todayKey() {
+    const d = new Date();
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+
+  function toCount(v) {
+    return (typeof v === 'number' && isFinite(v) && v >= 0) ? Math.floor(v) : 0;
+  }
+
+  // 기록은 { date, count } 형태로 저장하고 날짜가 바뀌면 0부터 다시 센다.
+  let pomodoroDate = todayKey();
+  let completedPomodoros = 0;
+  const savedPomodoros = store.get('ft_pomodoros', null);
+  if (typeof savedPomodoros === 'number') {
+    completedPomodoros = toCount(savedPomodoros);            // 이전 버전 형식을 이어받는다
+  } else if (savedPomodoros && typeof savedPomodoros === 'object' && savedPomodoros.date === pomodoroDate) {
+    completedPomodoros = toCount(savedPomodoros.count);
+  }
+
+  function addPomodoro() {
+    const today = todayKey();
+    if (today !== pomodoroDate) {          // 자정을 넘겨 세션이 끝난 경우
+      pomodoroDate = today;
+      completedPomodoros = 0;
+    }
+    completedPomodoros++;
+    store.set('ft_pomodoros', { date: pomodoroDate, count: completedPomodoros });
+    renderPomodoros();
+  }
 
   function fmt(s) {
     const m = Math.floor(s / 60).toString().padStart(2, '0');
@@ -226,78 +308,125 @@
 
   function renderPomodoros() {
     pomodoroCount.innerHTML = '';
-    const todayCount = completedPomodoros % 8 || (completedPomodoros > 0 ? 8 : 0);
+    const filled = Math.min(completedPomodoros, 8);
     for (let i = 0; i < 8; i++) {
       const dot = document.createElement('div');
-      dot.className = 'pomodoro-dot' + (i < todayCount ? ' filled' : '');
+      dot.className = 'pomodoro-dot' + (i < filled ? ' filled' : '');
       pomodoroCount.appendChild(dot);
     }
+    pomodoroLabel.textContent = completedPomodoros > 0
+      ? '오늘 ' + completedPomodoros + '회 완료'
+      : '';
   }
+
+  const BASE_TITLE = '포커스 타이머';
 
   function updateDisplay() {
     timeDisplay.textContent = fmt(remaining);
-    document.title = fmt(remaining) + ' · 포커스 타이머';
+    document.title = running ? fmt(remaining) + ' · ' + BASE_TITLE : BASE_TITLE;
+  }
+
+  let toastTimer = null;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 8000);
+  }
+
+  function hideToast() {
+    clearTimeout(toastTimer);
+    toast.hidden = true;
+  }
+
+  // AudioContext는 개수 제한이 있으므로 하나만 만들어 재사용한다.
+  let audioCtx = null;
+  function beep() {
+    try {
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) return;
+      if (!audioCtx) audioCtx = new Ctor();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.8);
+    } catch (e) {}
+  }
+
+  function remainingFromClock() {
+    return Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+  }
+
+  function stop() {
+    clearInterval(timerId);
+    timerId = null;
+    endTime = null;
+    running = false;
+    startBtn.textContent = '시작';
+    updateDisplay();
   }
 
   function tick() {
-    remaining--;
+    // 남은 초를 직접 감소시키지 않고 종료 시각과의 차이로 계산한다.
+    // 백그라운드 탭에서 인터벌이 느려지거나 멈춰도 표시 시간은 실제 경과와 일치한다.
+    remaining = remainingFromClock();
     updateDisplay();
     if (remaining <= 0) {
-      clearInterval(timerId);
-      running = false;
-      startBtn.textContent = '시작';
-      if (mode === 'focus') {
-        completedPomodoros++;
-        localStorage.setItem('ft_pomodoros', completedPomodoros);
-        renderPomodoros();
-      }
-      try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.8);
-      } catch(e) {}
-      alert((mode === 'focus' ? '집중 시간' : '휴식 시간') + '이 끝났습니다!');
+      const finished = mode;
+      stop();
+      if (finished === 'focus') addPomodoro();
+      beep();
+      showToast((finished === 'focus' ? '집중 시간' : '휴식 시간') + '이 끝났습니다!');
     }
   }
 
   startBtn.addEventListener('click', () => {
     if (running) {
-      clearInterval(timerId);
-      running = false;
-      startBtn.textContent = '시작';
+      remaining = remainingFromClock();
+      stop();
+      updateDisplay();
     } else {
+      if (remaining <= 0) remaining = totalSeconds;
+      hideToast();
       running = true;
       startBtn.textContent = '일시정지';
-      timerId = setInterval(tick, 1000);
+      endTime = Date.now() + remaining * 1000;
+      // 1초보다 촘촘히 확인해 표시 지연을 줄인다. 정확도는 endTime이 보장한다.
+      timerId = setInterval(tick, 250);
     }
   });
 
   resetBtn.addEventListener('click', () => {
-    clearInterval(timerId);
-    running = false;
-    startBtn.textContent = '시작';
+    stop();
+    hideToast();
     remaining = totalSeconds;
     updateDisplay();
   });
 
   modeBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      modeBtns.forEach(b => b.classList.remove('active'));
+      modeBtns.forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+      });
       btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
       mode = btn.dataset.mode;
       sessionLabel.textContent = LABELS[mode];
       totalSeconds = parseInt(btn.dataset.min, 10) * 60;
+      stop();
+      hideToast();
       remaining = totalSeconds;
-      clearInterval(timerId);
-      running = false;
-      startBtn.textContent = '시작';
       updateDisplay();
     });
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && running) tick();
   });
 
   updateDisplay();
@@ -307,10 +436,14 @@
   const todoInput = document.getElementById('todoInput');
   const addBtn = document.getElementById('addBtn');
   const todoList = document.getElementById('todoList');
-  let todos = JSON.parse(localStorage.getItem('ft_todos') || '[]');
+  let todos = store.get('ft_todos', []);
+  if (!Array.isArray(todos)) todos = [];
+  todos = todos
+    .filter(t => t && typeof t.text === 'string')
+    .map(t => ({ text: t.text, done: !!t.done }));
 
   function saveTodos() {
-    localStorage.setItem('ft_todos', JSON.stringify(todos));
+    store.set('ft_todos', todos);
   }
 
   function renderTodos() {
@@ -325,9 +458,12 @@
     todos.forEach((todo, idx) => {
       const li = document.createElement('li');
       li.className = 'todo-item' + (todo.done ? ' done' : '');
-      const check = document.createElement('div');
+      const check = document.createElement('button');
+      check.type = 'button';
       check.className = 'check';
       check.textContent = todo.done ? '✓' : '';
+      check.setAttribute('aria-pressed', todo.done ? 'true' : 'false');
+      check.setAttribute('aria-label', todo.text + ' 완료 표시');
       check.addEventListener('click', () => {
         todos[idx].done = !todos[idx].done;
         saveTodos();
@@ -337,8 +473,10 @@
       text.className = 'todo-text';
       text.textContent = todo.text;
       const del = document.createElement('button');
+      del.type = 'button';
       del.className = 'del';
       del.textContent = '✕';
+      del.setAttribute('aria-label', todo.text + ' 삭제');
       del.addEventListener('click', () => {
         todos.splice(idx, 1);
         saveTodos();
