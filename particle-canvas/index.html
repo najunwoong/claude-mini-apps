@@ -31,11 +31,12 @@
     border-radius: 50%;
     cursor: pointer;
     border: 2px solid transparent;
+    padding: 0;
     transition: transform 0.15s;
   }
   .swatch:hover { transform: scale(1.15); }
   .swatch.active { border-color: white; }
-  .ui button {
+  .ui button:not(.swatch) {
     background: rgba(255,255,255,0.1);
     border: none;
     color: #cfd3ff;
@@ -44,7 +45,12 @@
     cursor: pointer;
     font-size: 12px;
   }
-  .ui button:hover { background: rgba(255,255,255,0.2); }
+  .ui button:not(.swatch):hover { background: rgba(255,255,255,0.2); }
+  /* 키보드 사용자에게 현재 포커스 위치를 보이게 한다 */
+  :focus-visible {
+    outline: 2px solid #cfd3ff;
+    outline-offset: 3px;
+  }
   .hint {
     position: fixed;
     bottom: 16px; left: 50%;
@@ -59,12 +65,12 @@
 <body>
 <canvas id="c"></canvas>
 <div class="ui">
-  <div class="swatch active" style="background:#7aa2f7" data-palette="cool"></div>
-  <div class="swatch" style="background:#f7768e" data-palette="warm"></div>
-  <div class="swatch" style="background:#9ece6a" data-palette="nature"></div>
-  <div class="swatch" style="background:#bb9af7" data-palette="candy"></div>
-  <div class="swatch" style="background:#ffffff" data-palette="mono"></div>
-  <button id="clearBtn">지우기</button>
+  <button type="button" class="swatch active" style="background:#7aa2f7" data-palette="cool" aria-pressed="true" aria-label="차가운 색"></button>
+  <button type="button" class="swatch" style="background:#f7768e" data-palette="warm" aria-pressed="false" aria-label="따뜻한 색"></button>
+  <button type="button" class="swatch" style="background:#9ece6a" data-palette="nature" aria-pressed="false" aria-label="자연 색"></button>
+  <button type="button" class="swatch" style="background:#bb9af7" data-palette="candy" aria-pressed="false" aria-label="캔디 색"></button>
+  <button type="button" class="swatch" style="background:#ffffff" data-palette="mono" aria-pressed="false" aria-label="무채색"></button>
+  <button type="button" id="clearBtn">지우기</button>
 </div>
 <div class="hint">마우스나 손가락으로 움직여서 그려보세요</div>
 
@@ -74,8 +80,16 @@
   const ctx = canvas.getContext('2d');
   let W, H;
   function resize() {
-    W = canvas.width = window.innerWidth;
-    H = canvas.height = window.innerHeight;
+    // 버퍼는 실제 픽셀 밀도로 잡고 좌표계는 CSS 픽셀로 유지한다.
+    // 이렇게 하지 않으면 고밀도(레티나) 화면에서 파티클이 뭉개진다.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // canvas.width 대입이 변환을 초기화하므로 그 뒤에 적용한다
   }
   resize();
   window.addEventListener('resize', resize);
@@ -89,10 +103,15 @@
   };
   let currentPalette = palettes.cool;
 
-  document.querySelectorAll('.swatch').forEach(sw => {
+  const swatches = document.querySelectorAll('.swatch');
+  swatches.forEach(sw => {
     sw.addEventListener('click', () => {
-      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      swatches.forEach(s => {
+        s.classList.remove('active');
+        s.setAttribute('aria-pressed', 'false');
+      });
       sw.classList.add('active');
+      sw.setAttribute('aria-pressed', 'true');
       currentPalette = palettes[sw.dataset.palette];
     });
   });
@@ -102,7 +121,8 @@
   });
 
   let particles = [];
-  let mouse = { x: W/2, y: H/2, px: W/2, py: H/2, down: false };
+  // 직전 포인터 위치. null이면 "아직 모름"이라는 뜻이다.
+  let mouse = { px: null, py: null };
 
   function rand(min, max) { return Math.random() * (max - min) + min; }
 
@@ -120,6 +140,13 @@
   }
 
   function handleMove(x, y) {
+    // 직전 위치를 모르는 상태(첫 입력, 창 밖에 나갔다 돌아온 직후)에서 보간하면
+    // 낡은 좌표에서 끌려오는 엉뚱한 선이 생긴다. 기준만 잡고 점 하나만 찍는다.
+    if (mouse.px === null) {
+      mouse.px = x; mouse.py = y;
+      spawn(x, y, 0, 0);
+      return;
+    }
     const dx = x - mouse.px;
     const dy = y - mouse.py;
     const dist = Math.hypot(dx, dy);
@@ -129,32 +156,47 @@
       spawn(mouse.px + dx * t, mouse.py + dy * t, dx * 0.05, dy * 0.05);
     }
     mouse.px = x; mouse.py = y;
-    mouse.x = x; mouse.y = y;
+  }
+
+  function syncTo(x, y) {
+    mouse.px = x; mouse.py = y;
+  }
+
+  function forgetPosition() {
+    mouse.px = null; mouse.py = null;
   }
 
   canvas.addEventListener('mousemove', e => {
     handleMove(e.clientX, e.clientY);
   });
-  canvas.addEventListener('mousedown', e => {
-    mouse.down = true;
-    mouse.px = e.clientX; mouse.py = e.clientY;
-  });
-  window.addEventListener('mouseup', () => mouse.down = false);
+  canvas.addEventListener('mousedown', e => syncTo(e.clientX, e.clientY));
+  // 포인터가 창을 벗어나면 다음 입력이 어디서 들어올지 알 수 없으므로 기준을 버린다.
+  canvas.addEventListener('mouseleave', forgetPosition);
+  window.addEventListener('blur', forgetPosition);
 
   canvas.addEventListener('touchstart', e => {
     e.preventDefault();
     const t = e.touches[0];
-    mouse.px = t.clientX; mouse.py = t.clientY;
+    syncTo(t.clientX, t.clientY);
   }, { passive: false });
   canvas.addEventListener('touchmove', e => {
     e.preventDefault();
     const t = e.touches[0];
     handleMove(t.clientX, t.clientY);
   }, { passive: false });
+  canvas.addEventListener('touchend', forgetPosition);
+  canvas.addEventListener('touchcancel', forgetPosition);
+
+  // 파티클마다 fillStyle을 바꾸고 fill을 호출하면 프레임당 수천 번의 드로우콜이 된다.
+  // 색상과 투명도 구간(1/ALPHA_STEPS 단위)이 같은 것끼리 묶어 한 번에 채운다.
+  const ALPHA_STEPS = 20;
+  const batches = new Map();
 
   function loop() {
     ctx.fillStyle = 'rgba(5,6,10,0.15)';
     ctx.fillRect(0, 0, W, H);
+
+    batches.forEach(bucket => { bucket.length = 0; });   // 배열을 재사용해 프레임마다 할당하지 않는다
 
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
@@ -168,12 +210,30 @@
         particles.splice(i, 1);
         continue;
       }
-      ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-      ctx.fill();
+      const step = Math.max(1, Math.ceil(p.life * ALPHA_STEPS));
+      const key = p.color + '|' + step;
+      let bucket = batches.get(key);
+      if (!bucket) {
+        bucket = [];
+        batches.set(key, bucket);
+      }
+      bucket.push(p);
     }
+
+    batches.forEach((bucket, key) => {
+      if (bucket.length === 0) return;
+      const sep = key.indexOf('|');
+      ctx.fillStyle = key.slice(0, sep);
+      ctx.globalAlpha = Number(key.slice(sep + 1)) / ALPHA_STEPS;
+      ctx.beginPath();
+      for (let i = 0; i < bucket.length; i++) {
+        const p = bucket[i];
+        const r = p.size * p.life;
+        ctx.moveTo(p.x + r, p.y);   // moveTo가 없으면 원들이 선으로 이어진다
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    });
     ctx.globalAlpha = 1;
 
     if (particles.length > 2500) particles.splice(0, particles.length - 2500);
