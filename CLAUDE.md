@@ -12,6 +12,27 @@
 - 새 앱은 최상위에 `<앱이름>/index.html` 형태로 추가한다.
 - 확인 방법: 해당 `index.html`을 브라우저로 직접 연다.
 
+위 규칙은 **앱 코드**에 적용된다. `tests/`의 테스트 도구는 예외이며, CI에서만 쓰이고
+앱에 번들되지 않는다.
+
+## 테스트
+
+```sh
+node --test tests/*.test.js          # 의존성 없음 — 구조 규칙 + 로직
+npm i --no-save playwright           # 브라우저 테스트에만 필요
+npx playwright install chromium
+node --test tests/browser/*.test.js  # 실제 Chromium
+```
+
+- `tests/structure.test.js` — 위 "코드 규칙"을 CI에서 강제한다. 앱은 최상위에서
+  `index.html`을 가진 폴더로 자동 인식되므로, 새 앱을 추가하면 별도 등록 없이 검사된다.
+- `tests/focus-timer.test.js`, `tests/particle-canvas.test.js` — 가짜 시계와 DOM 대역 위에서
+  스크립트를 실행한다. 25분 세션이나 백그라운드 탭 스로틀링을 즉시 재현할 수 있다.
+- `tests/browser/` — Node 대역이 잡지 못하는 것을 잡는다. CSS 특이도 회귀, 실제 이벤트
+  발생 순서, 캔버스에 찍힌 픽셀. 두 계층 모두 있어야 하며, 한쪽만으로는 부족하다.
+
+playwright가 없으면 브라우저 테스트는 건너뛰되, `CI=true`에서는 조용히 통과하지 않고 실패한다.
+
 ## 응답 규칙
 
 - 한국어로 답한다.

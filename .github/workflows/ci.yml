@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  logic:
+    name: 구조·로직 테스트
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # 의존성 없이 도는 계층: 프로젝트 규칙 검사 + 가짜 시계/DOM 위의 로직 테스트
+      - name: 테스트 실행
+        run: node --test tests/*.test.js
+
+  browser:
+    name: 브라우저 테스트
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # 앱 자체는 의존성이 없다. playwright는 CI에서만 쓰는 테스트 도구라
+      # 저장소에 커밋하지 않고 --no-save로 설치한다.
+      - name: Playwright 설치
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: 테스트 실행
+        run: node --test tests/browser/*.test.js
