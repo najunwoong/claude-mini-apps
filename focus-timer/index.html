@@ -211,12 +211,35 @@
 
   const LABELS = { focus: '집중 시간', short: '짧은 휴식', long: '긴 휴식' };
 
+  // localStorage는 프라이빗 모드나 사이트 데이터 차단 환경에서 예외를 던진다.
+  // 실패해도 앱이 죽지 않도록 감싸고 기본값으로 폴백한다.
+  const store = {
+    get(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw === null ? fallback : JSON.parse(raw);
+      } catch (e) {
+        return fallback;
+      }
+    },
+    set(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (e) {}
+    }
+  };
+
   let mode = 'focus';
   let totalSeconds = 25 * 60;
   let remaining = totalSeconds;
   let running = false;
   let timerId = null;
-  let completedPomodoros = parseInt(localStorage.getItem('ft_pomodoros') || '0', 10);
+  let endTime = null;
+
+  let completedPomodoros = store.get('ft_pomodoros', 0);
+  if (typeof completedPomodoros !== 'number' || !isFinite(completedPomodoros) || completedPomodoros < 0) {
+    completedPomodoros = 0;
+  }
 
   function fmt(s) {
     const m = Math.floor(s / 60).toString().padStart(2, '0');
@@ -239,16 +262,28 @@
     document.title = fmt(remaining) + ' · 포커스 타이머';
   }
 
+  function remainingFromClock() {
+    return Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+  }
+
+  function stop() {
+    clearInterval(timerId);
+    timerId = null;
+    endTime = null;
+    running = false;
+    startBtn.textContent = '시작';
+  }
+
   function tick() {
-    remaining--;
+    // 남은 초를 직접 감소시키지 않고 종료 시각과의 차이로 계산한다.
+    // 백그라운드 탭에서 인터벌이 느려지거나 멈춰도 표시 시간은 실제 경과와 일치한다.
+    remaining = remainingFromClock();
     updateDisplay();
     if (remaining <= 0) {
-      clearInterval(timerId);
-      running = false;
-      startBtn.textContent = '시작';
+      stop();
       if (mode === 'focus') {
         completedPomodoros++;
-        localStorage.setItem('ft_pomodoros', completedPomodoros);
+        store.set('ft_pomodoros', completedPomodoros);
         renderPomodoros();
       }
       try {
@@ -267,20 +302,21 @@
 
   startBtn.addEventListener('click', () => {
     if (running) {
-      clearInterval(timerId);
-      running = false;
-      startBtn.textContent = '시작';
+      remaining = remainingFromClock();
+      stop();
+      updateDisplay();
     } else {
+      if (remaining <= 0) remaining = totalSeconds;
       running = true;
       startBtn.textContent = '일시정지';
-      timerId = setInterval(tick, 1000);
+      endTime = Date.now() + remaining * 1000;
+      // 1초보다 촘촘히 확인해 표시 지연을 줄인다. 정확도는 endTime이 보장한다.
+      timerId = setInterval(tick, 250);
     }
   });
 
   resetBtn.addEventListener('click', () => {
-    clearInterval(timerId);
-    running = false;
-    startBtn.textContent = '시작';
+    stop();
     remaining = totalSeconds;
     updateDisplay();
   });
@@ -292,12 +328,14 @@
       mode = btn.dataset.mode;
       sessionLabel.textContent = LABELS[mode];
       totalSeconds = parseInt(btn.dataset.min, 10) * 60;
+      stop();
       remaining = totalSeconds;
-      clearInterval(timerId);
-      running = false;
-      startBtn.textContent = '시작';
       updateDisplay();
     });
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && running) tick();
   });
 
   updateDisplay();
@@ -307,10 +345,14 @@
   const todoInput = document.getElementById('todoInput');
   const addBtn = document.getElementById('addBtn');
   const todoList = document.getElementById('todoList');
-  let todos = JSON.parse(localStorage.getItem('ft_todos') || '[]');
+  let todos = store.get('ft_todos', []);
+  if (!Array.isArray(todos)) todos = [];
+  todos = todos
+    .filter(t => t && typeof t.text === 'string')
+    .map(t => ({ text: t.text, done: !!t.done }));
 
   function saveTodos() {
-    localStorage.setItem('ft_todos', JSON.stringify(todos));
+    store.set('ft_todos', todos);
   }
 
   function renderTodos() {
