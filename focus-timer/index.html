@@ -13,6 +13,8 @@
     --text: #c0caf5;
     --text-dim: #565f89;
     --done: #9ece6a;
+    /* 순수 검정 대신 배경 쪽으로 튼 그림자. 두 카드가 이 값을 그대로 공유한다. */
+    --card-shadow: 0 10px 40px rgba(6, 7, 16, 0.45), 0 0 0 1px rgba(255,255,255,0.04);
   }
   * { box-sizing: border-box; }
   body {
@@ -43,8 +45,7 @@
     border-radius: 20px;
     padding: 32px 24px;
     text-align: center;
-    /* 순수 검정 대신 배경색 쪽으로 살짝 틀어 그림자를 화면에 녹아들게 한다 */
-    box-shadow: 0 10px 40px rgba(6, 7, 16, 0.45), 0 0 0 1px rgba(255,255,255,0.04);
+    box-shadow: var(--card-shadow);
   }
   .mode-switch {
     display: flex;
@@ -150,7 +151,7 @@
     background: var(--panel);
     border-radius: 20px;
     padding: 20px;
-    box-shadow: 0 10px 40px rgba(6, 7, 16, 0.45), 0 0 0 1px rgba(255,255,255,0.04);
+    box-shadow: var(--card-shadow);
   }
   .todo-card h3 {
     margin: 0 0 12px 0;
@@ -185,7 +186,11 @@
     font-weight: 700;
     cursor: pointer;
     font-size: 18px;
+    transition: transform 0.1s, opacity 0.2s;
   }
+  /* .btn-primary와 같은 액센트 배경을 쓰는 만큼, 눌림/hover 반응도 맞춘다 */
+  .todo-input-row button:hover { opacity: 0.88; }
+  .todo-input-row button:active { transform: scale(0.94); opacity: 1; }
   ul.todo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .todo-item {
     display: flex;
