@@ -14,6 +14,9 @@
     --text-dim: #565f89;
     --done: #9ece6a;
     --card-shadow: 0 10px 40px rgba(6, 7, 16, 0.45), 0 0 0 1px rgba(255,255,255,0.04);
+    /* "채워지지 않은 자리"를 나타내는 은은한 흰색 오버레이. focus-timer의
+       프로그레스 링 트랙과 같은 역할·같은 값을 쓴다. */
+    --slot-bg: rgba(255,255,255,0.08);
   }
   * { box-sizing: border-box; }
   body {
@@ -92,7 +95,7 @@
   .cell-bg {
     aspect-ratio: 1 / 1;
     border-radius: 10px;
-    background: rgba(255,255,255,0.04);
+    background: var(--slot-bg);
   }
   .tile-layer {
     position: absolute;
@@ -109,8 +112,8 @@
     align-items: center;
     justify-content: center;
     font-weight: 800;
-    background: var(--panel);
-    color: var(--text);
+    /* background/color는 일부러 안 둔다 — 렌더링된 타일은 항상 data-value를
+       갖고, 아래 [data-value] 규칙이 특이도가 더 높아 항상 이긴다. */
   }
   .tile.spawn { animation: tile-in 0.15s ease; }
   .tile.merged { animation: tile-pop 0.15s ease; }

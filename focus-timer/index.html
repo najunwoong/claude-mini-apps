@@ -15,6 +15,9 @@
     --done: #9ece6a;
     /* 순수 검정 대신 배경 쪽으로 튼 그림자. 두 카드가 이 값을 그대로 공유한다. */
     --card-shadow: 0 10px 40px rgba(6, 7, 16, 0.45), 0 0 0 1px rgba(255,255,255,0.04);
+    /* "채워지지 않은 자리"를 나타내는 은은한 흰색 오버레이. 2048의 빈 칸과
+       같은 역할·같은 값을 쓴다. */
+    --slot-bg: rgba(255,255,255,0.08);
   }
   * { box-sizing: border-box; }
   body {
@@ -82,7 +85,7 @@
     height: 100%;
     transform: rotate(-90deg);
   }
-  .progress-ring-track { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 8; }
+  .progress-ring-track { fill: none; stroke: var(--slot-bg); stroke-width: 8; }
   .progress-ring-fill {
     fill: none;
     stroke: var(--accent);
