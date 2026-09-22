@@ -25,6 +25,11 @@
     color: #cfd3ff;
     font-size: 13px;
     z-index: 10;
+    animation: ui-in 0.4s ease-out;
+  }
+  @keyframes ui-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   .swatch {
     width: 22px; height: 22px;
@@ -36,7 +41,9 @@
   }
   .swatch:hover { transform: scale(1.15); }
   .swatch:active { transform: scale(0.92); }
-  .swatch.active { border-color: white; }
+  /* box-shadow는 getBoundingClientRect를 바꾸지 않으므로, 스와치의 실제 22px 원형을
+     건드리지 않고도 선택 표시를 낼 수 있다. */
+  .swatch.active { border-color: white; box-shadow: 0 0 0 3px rgba(255,255,255,0.15); }
   .ui button:not(.swatch) {
     background: rgba(255,255,255,0.1);
     border: none;
@@ -68,6 +75,7 @@
   .hint.faded { opacity: 0; }
   @media (prefers-reduced-motion: reduce) {
     .hint { transition: none; }
+    .ui { animation: none; }
   }
 </style>
 </head>
@@ -210,6 +218,7 @@
   const batches = new Map();
 
   function loop() {
+    ctx.shadowBlur = 0;   // 트레일 지우기는 화면 전체를 덮으므로, 글로우가 켜진 채면 매우 느려진다
     ctx.fillStyle = 'rgba(5,6,10,0.15)';
     ctx.fillRect(0, 0, W, H);
 
@@ -240,7 +249,10 @@
     batches.forEach((bucket, key) => {
       if (bucket.length === 0) return;
       const sep = key.indexOf('|');
-      ctx.fillStyle = key.slice(0, sep);
+      const color = key.slice(0, sep);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;   // 파티클 하나하나에 은은한 빛 번짐을 준다
       ctx.globalAlpha = Number(key.slice(sep + 1)) / ALPHA_STEPS;
       ctx.beginPath();
       for (let i = 0; i < bucket.length; i++) {
@@ -251,6 +263,7 @@
       }
       ctx.fill();
     });
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
 
     if (particles.length > 2500) particles.splice(0, particles.length - 2500);
