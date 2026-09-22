@@ -6,12 +6,12 @@ const vm = require('node:vm');
 const { extractScript } = require('./app');
 
 const EL_IDS = ['timeDisplay', 'sessionLabel', 'startBtn', 'resetBtn', 'pomodoroCount',
-                'pomodoroLabel', 'toast', 'todoInput', 'addBtn', 'todoList'];
+                'pomodoroLabel', 'toast', 'todoInput', 'addBtn', 'todoList', 'ringFill'];
 
 function makeEl(tag) {
   return {
     tag, textContent: '', value: '', className: '', hidden: false, type: '',
-    dataset: {}, attrs: {}, children: [],
+    dataset: {}, attrs: {}, children: [], style: {},
     classList: {
       _s: new Set(),
       add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); },

@@ -23,13 +23,23 @@ function boot({ dpr = 1, width = 1440, height = 900 } = {}) {
     width: 0, height: 0, style: {}, getContext: () => ctx,
     addEventListener(t, f) { listeners[t] = f; },
   };
+  /** 'c' 이외의 id로 조회하는 UI 장식 요소(힌트 텍스트 등)를 위한 최소 대역. */
+  const genericEl = () => ({
+    style: {}, hidden: false,
+    classList: {
+      _s: new Set(),
+      add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); },
+      contains(c) { return this._s.has(c); },
+    },
+    addEventListener() {},
+  });
   const rafQueue = [];
   const sandbox = {
     Math, Map, Number, Array, console,
     requestAnimationFrame: fn => rafQueue.push(fn),
     window: { innerWidth: width, innerHeight: height, devicePixelRatio: dpr, addEventListener() {} },
     document: {
-      getElementById: id => (id === 'c' ? canvas : { addEventListener() {} }),
+      getElementById: id => (id === 'c' ? canvas : genericEl()),
       querySelectorAll: () => [],
       addEventListener() {},
     },

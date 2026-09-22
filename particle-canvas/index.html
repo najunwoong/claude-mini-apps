@@ -7,7 +7,7 @@
 <style>
   html, body {
     margin: 0; padding: 0; overflow: hidden;
-    background: #05060a;
+    background: radial-gradient(circle at 50% 35%, #0d1020 0%, #05060a 65%);
     height: 100%;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
@@ -35,6 +35,7 @@
     transition: transform 0.15s;
   }
   .swatch:hover { transform: scale(1.15); }
+  .swatch:active { transform: scale(0.92); }
   .swatch.active { border-color: white; }
   .ui button:not(.swatch) {
     background: rgba(255,255,255,0.1);
@@ -44,8 +45,10 @@
     border-radius: 8px;
     cursor: pointer;
     font-size: 12px;
+    transition: background 0.15s, transform 0.1s;
   }
   .ui button:not(.swatch):hover { background: rgba(255,255,255,0.2); }
+  .ui button:not(.swatch):active { transform: scale(0.94); }
   /* 키보드 사용자에게 현재 포커스 위치를 보이게 한다 */
   :focus-visible {
     outline: 2px solid #cfd3ff;
@@ -59,6 +62,12 @@
     font-size: 12px;
     z-index: 10;
     pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+  /* 처음 그려보면 목적을 알았다는 뜻이므로 안내 문구는 다시 켜지 않고 사라진다. */
+  .hint.faded { opacity: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    .hint { transition: none; }
   }
 </style>
 </head>
@@ -72,7 +81,7 @@
   <button type="button" class="swatch" style="background:#ffffff" data-palette="mono" aria-pressed="false" aria-label="무채색"></button>
   <button type="button" id="clearBtn">지우기</button>
 </div>
-<div class="hint">마우스나 손가락으로 움직여서 그려보세요</div>
+<div class="hint" id="hint">마우스나 손가락으로 움직여서 그려보세요</div>
 
 <script>
 (function() {
@@ -120,6 +129,9 @@
     particles.length = 0;
   });
 
+  const hint = document.getElementById('hint');
+  let hintFaded = false;
+
   let particles = [];
   // 직전 포인터 위치. null이면 "아직 모름"이라는 뜻이다.
   let mouse = { px: null, py: null };
@@ -127,6 +139,11 @@
   function rand(min, max) { return Math.random() * (max - min) + min; }
 
   function spawn(x, y, vx, vy) {
+    // 첫 그림이 그려지면 사용법을 알았다는 뜻이므로 안내 문구를 치운다.
+    if (!hintFaded) {
+      hintFaded = true;
+      hint.classList.add('faded');
+    }
     const color = currentPalette[Math.floor(Math.random() * currentPalette.length)];
     particles.push({
       x, y,
