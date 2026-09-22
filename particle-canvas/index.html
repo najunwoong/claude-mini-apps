@@ -5,9 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>파티클 캔버스</title>
 <style>
+  /* focus-timer의 :root 토큰과 이름·값을 맞춘다. 두 앱은 같은 Tokyo Night 계열
+     팔레트를 쓰므로(파랑 액센트 #7aa2f7, 핑크 #f7768e, 초록 #9ece6a), 실제로
+     공유되는 값만 변수로 올려 우연의 일치가 아니라 문서화된 브랜드 토큰으로 만든다. */
+  :root {
+    --accent: #7aa2f7;
+    --text: #c0caf5;
+  }
   html, body {
     margin: 0; padding: 0; overflow: hidden;
-    background: #05060a;
+    background: radial-gradient(circle at 50% 35%, #0d1020 0%, #05060a 65%);
     height: 100%;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
@@ -22,9 +29,14 @@
     backdrop-filter: blur(8px);
     padding: 10px 14px;
     border-radius: 14px;
-    color: #cfd3ff;
+    color: var(--text);
     font-size: 13px;
     z-index: 10;
+    animation: ui-in 0.4s ease-out;
+  }
+  @keyframes ui-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   .swatch {
     width: 22px; height: 22px;
@@ -35,30 +47,44 @@
     transition: transform 0.15s;
   }
   .swatch:hover { transform: scale(1.15); }
-  .swatch.active { border-color: white; }
+  .swatch:active { transform: scale(0.92); }
+  /* box-shadow는 getBoundingClientRect를 바꾸지 않으므로, 스와치의 실제 22px 원형을
+     건드리지 않고도 선택 표시를 낼 수 있다. */
+  .swatch.active { border-color: white; box-shadow: 0 0 0 3px rgba(255,255,255,0.15); }
   .ui button:not(.swatch) {
     background: rgba(255,255,255,0.1);
     border: none;
-    color: #cfd3ff;
+    color: var(--text);
     padding: 6px 12px;
     border-radius: 8px;
     cursor: pointer;
     font-size: 12px;
+    transition: background 0.15s, transform 0.1s;
   }
   .ui button:not(.swatch):hover { background: rgba(255,255,255,0.2); }
-  /* 키보드 사용자에게 현재 포커스 위치를 보이게 한다 */
+  .ui button:not(.swatch):active { transform: scale(0.94); }
+  /* 키보드 사용자에게 현재 포커스 위치를 보이게 한다. focus-timer와 같은 브랜드
+     액센트를 쓴다 — 포커스 링은 두 앱 모두 같은 역할이므로 색도 같아야 한다. */
   :focus-visible {
-    outline: 2px solid #cfd3ff;
-    outline-offset: 3px;
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   .hint {
     position: fixed;
     bottom: 16px; left: 50%;
     transform: translateX(-50%);
-    color: rgba(207,211,255,0.5);
+    color: var(--text);
+    opacity: 0.5;   /* .ui와 같은 텍스트 토큰을 쓰되, 부차적인 안내이므로 옅게 */
     font-size: 12px;
     z-index: 10;
     pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+  /* 처음 그려보면 목적을 알았다는 뜻이므로 안내 문구는 다시 켜지 않고 사라진다. */
+  .hint.faded { opacity: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    .hint { transition: none; }
+    .ui { animation: none; }
   }
 </style>
 </head>
@@ -72,7 +98,7 @@
   <button type="button" class="swatch" style="background:#ffffff" data-palette="mono" aria-pressed="false" aria-label="무채색"></button>
   <button type="button" id="clearBtn">지우기</button>
 </div>
-<div class="hint">마우스나 손가락으로 움직여서 그려보세요</div>
+<div class="hint" id="hint">마우스나 손가락으로 움직여서 그려보세요</div>
 
 <script>
 (function() {
@@ -120,6 +146,9 @@
     particles.length = 0;
   });
 
+  const hint = document.getElementById('hint');
+  let hintFaded = false;
+
   let particles = [];
   // 직전 포인터 위치. null이면 "아직 모름"이라는 뜻이다.
   let mouse = { px: null, py: null };
@@ -127,6 +156,11 @@
   function rand(min, max) { return Math.random() * (max - min) + min; }
 
   function spawn(x, y, vx, vy) {
+    // 첫 그림이 그려지면 사용법을 알았다는 뜻이므로 안내 문구를 치운다.
+    if (!hintFaded) {
+      hintFaded = true;
+      hint.classList.add('faded');
+    }
     const color = currentPalette[Math.floor(Math.random() * currentPalette.length)];
     particles.push({
       x, y,
@@ -193,6 +227,12 @@
   const batches = new Map();
 
   function loop() {
+    ctx.shadowBlur = 0;   // 트레일 지우기는 화면 전체를 덮으므로, 글로우가 켜진 채면 매우 느려진다
+    // 5,6,10 = <style>의 배경 그라디언트 마지막 stop(#05060a)과 같은 값이다.
+    // 캔버스가 완전히 불투명해진 뒤에도 페이지 배경과 이어져 보이도록 맞춘 것 —
+    // CSS 변수로 통일하려면 JS에서 getComputedStyle을 읽어야 하는데, 테스트용
+    // 가짜 DOM에는 document.documentElement가 없어 그대로 깨진다. 값을 바꿀 땐
+    // 두 곳을 함께 바꿔야 한다.
     ctx.fillStyle = 'rgba(5,6,10,0.15)';
     ctx.fillRect(0, 0, W, H);
 
@@ -223,7 +263,10 @@
     batches.forEach((bucket, key) => {
       if (bucket.length === 0) return;
       const sep = key.indexOf('|');
-      ctx.fillStyle = key.slice(0, sep);
+      const color = key.slice(0, sep);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;   // 파티클 하나하나에 은은한 빛 번짐을 준다
       ctx.globalAlpha = Number(key.slice(sep + 1)) / ALPHA_STEPS;
       ctx.beginPath();
       for (let i = 0; i < bucket.length; i++) {
@@ -234,6 +277,7 @@
       }
       ctx.fill();
     });
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
 
     if (particles.length > 2500) particles.splice(0, particles.length - 2500);
