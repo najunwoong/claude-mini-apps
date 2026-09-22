@@ -10,6 +10,7 @@
      공유되는 값만 변수로 올려 우연의 일치가 아니라 문서화된 브랜드 토큰으로 만든다. */
   :root {
     --accent: #7aa2f7;
+    --text: #c0caf5;
   }
   html, body {
     margin: 0; padding: 0; overflow: hidden;
@@ -28,7 +29,7 @@
     backdrop-filter: blur(8px);
     padding: 10px 14px;
     border-radius: 14px;
-    color: #cfd3ff;
+    color: var(--text);
     font-size: 13px;
     z-index: 10;
     animation: ui-in 0.4s ease-out;
@@ -53,7 +54,7 @@
   .ui button:not(.swatch) {
     background: rgba(255,255,255,0.1);
     border: none;
-    color: #cfd3ff;
+    color: var(--text);
     padding: 6px 12px;
     border-radius: 8px;
     cursor: pointer;
@@ -72,7 +73,8 @@
     position: fixed;
     bottom: 16px; left: 50%;
     transform: translateX(-50%);
-    color: rgba(207,211,255,0.5);
+    color: var(--text);
+    opacity: 0.5;   /* .ui와 같은 텍스트 토큰을 쓰되, 부차적인 안내이므로 옅게 */
     font-size: 12px;
     z-index: 10;
     pointer-events: none;
@@ -226,6 +228,11 @@
 
   function loop() {
     ctx.shadowBlur = 0;   // 트레일 지우기는 화면 전체를 덮으므로, 글로우가 켜진 채면 매우 느려진다
+    // 5,6,10 = <style>의 배경 그라디언트 마지막 stop(#05060a)과 같은 값이다.
+    // 캔버스가 완전히 불투명해진 뒤에도 페이지 배경과 이어져 보이도록 맞춘 것 —
+    // CSS 변수로 통일하려면 JS에서 getComputedStyle을 읽어야 하는데, 테스트용
+    // 가짜 DOM에는 document.documentElement가 없어 그대로 깨진다. 값을 바꿀 땐
+    // 두 곳을 함께 바꿔야 한다.
     ctx.fillStyle = 'rgba(5,6,10,0.15)';
     ctx.fillRect(0, 0, W, H);
 
