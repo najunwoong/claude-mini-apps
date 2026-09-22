@@ -161,3 +161,50 @@ describe('focus-timer', () => {
     await page.close();
   });
 });
+
+describe('2048', () => {
+  test('타일 두 개로 시작하고, 방향키로 상태가 바뀐다', async () => {
+    const page = await open('2048', { viewport: { width: 480, height: 820 } });
+    assert.strictEqual(await page.locator('.tile').count(), 2);
+
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowDown');
+
+    const scoreText = await page.locator('#score').textContent();
+    assert.match(scoreText, /^\d+$/);
+    const tileCount = await page.locator('.tile').count();
+    assert.ok(tileCount >= 2 && tileCount <= 16, `타일 수가 비정상입니다 (${tileCount})`);
+    assert.deepStrictEqual(page.errors, []);
+    await page.close();
+  });
+
+  test('새 게임 버튼을 누르면 점수와 보드가 초기화된다', async () => {
+    const page = await open('2048', { viewport: { width: 480, height: 820 } });
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowUp');
+
+    await page.locator('#newGameBtn').click();
+    assert.strictEqual(await page.locator('#score').textContent(), '0');
+    assert.strictEqual(await page.locator('.tile').count(), 2);
+    // 오버레이는 페이드 트랜지션 때문에 display:none이 아니라 opacity:0으로 숨는다 —
+    // isHidden()은 이를 "보임"으로 판단하므로 opacity를 직접 확인한다.
+    const overlayOpacity = await page.locator('#overlay').evaluate(el => getComputedStyle(el).opacity);
+    assert.strictEqual(overlayOpacity, '0');
+    await page.close();
+  });
+
+  test('타일 색이 data-value에 맞게 적용된다 (특이도 회귀)', async () => {
+    // 시작 타일은 무작위로 2 또는 4이므로, 어느 쪽이 나오든 맞는 색인지 확인한다.
+    const page = await open('2048', { viewport: { width: 480, height: 820 } });
+    const EXPECTED = { '2': 'rgb(42, 45, 66)', '4': 'rgb(51, 54, 80)' };
+    const { value, bg } = await page.locator('.tile').first().evaluate(el => ({
+      value: el.dataset.value,
+      bg: getComputedStyle(el).backgroundColor,
+    }));
+    assert.strictEqual(bg, EXPECTED[value], `data-value=${value} 타일의 배경색이 어긋납니다`);
+    await page.close();
+  });
+});

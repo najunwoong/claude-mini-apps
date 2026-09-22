@@ -2,6 +2,7 @@
 
 간단한 바닐라 HTML/CSS/JS 미니 앱 모음. 각 앱은 폴더 하나 + `index.html` 단일 파일 구조.
 
+- `2048/index.html` — 2048 게임
 - `focus-timer/index.html` — 포커스 타이머
 - `particle-canvas/index.html` — 파티클 캔버스
 
